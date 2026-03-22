@@ -23,6 +23,8 @@ class RateCollectionService:
         for hotel in hotels:
             results = adapter.collect_rates(
                 hotel_name=hotel.name,
+                city=hotel.city,
+                address=hotel.address,
                 check_in_date=query.check_in_date,
                 check_out_date=query.check_out_date,
                 adults=query.adults,

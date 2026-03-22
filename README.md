@@ -58,6 +58,24 @@ uv run uvicorn hotel_spider.main:app --reload
 
 如果你要试别的实现，例如 Python 版 `uvx amap-mcp-server`，也可以替换 `AMAP_MCP_COMMAND` 和 `AMAP_MCP_ARGS`，但我当前在这个项目里实际验证通过的是 npm 这一套。
 
+## 携程登录态接入
+
+如果要抓携程真实价格，需要提供已登录的 `storage_state.json`：
+
+```bash
+export PLAYWRIGHT_BROWSERS_PATH=/home/你的用户名/tools/playwright-browsers
+export CTRIP_PROVIDER=playwright
+export CTRIP_STORAGE_STATE_PATH=/mnt/d/Lab/workspace/trae_projects/hotel_spider/storage_state.json
+export CTRIP_HEADLESS=true
+```
+
+当前项目已经验证：
+
+1. 酒店名可映射到携程 `hotelId`
+2. 详情页能触发真实房型接口 `33278/getHotelRoomListInland`
+3. 未登录态价格会被隐藏
+4. 所以真实价格抓取依赖登录态
+
 ## 环境变量
 
 可参考 [`.env.example`](/mnt/d/Lab/workspace/trae_projects/hotel_spider/.env.example)

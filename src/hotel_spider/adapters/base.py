@@ -48,6 +48,8 @@ class OtaAdapter(Protocol):
     def collect_rates(
         self,
         hotel_name: str,
+        city: str | None,
+        address: str | None,
         check_in_date: date,
         check_out_date: date,
         adults: int,

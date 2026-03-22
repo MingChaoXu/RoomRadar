@@ -209,6 +209,12 @@ def render_admin_html() -> str:
         <a href="/openapi.json" target="_blank" rel="noreferrer">OpenAPI JSON</a>
         <a href="/healthz" target="_blank" rel="noreferrer">Health Check</a>
       </div>
+      <div class="toolbar">
+        <span class="pill" id="provider-pill">AMap Provider: loading...</span>
+        <span class="pill" id="key-pill">API Key: checking...</span>
+        <span class="pill" id="ctrip-pill">Ctrip Provider: loading...</span>
+        <span class="pill" id="ctrip-state-pill">Ctrip State: checking...</span>
+      </div>
     </section>
 
     <div class="grid">
@@ -219,14 +225,14 @@ def render_admin_html() -> str:
           <form id="hotel-form">
             <div class="row">
               <label>酒店名称
-                <input name="name" value="上海静安示例酒店" required />
+                <input name="name" value="上海静安香格里拉大酒店" required />
               </label>
               <label>城市
                 <input name="city" value="上海" />
               </label>
             </div>
             <label>地址
-              <input name="address" value="静安区示例路 88 号" />
+              <input name="address" value="上海市静安区延安中路1218号" />
             </label>
             <div class="row">
               <label>品牌
@@ -249,8 +255,27 @@ def render_admin_html() -> str:
         </section>
 
         <section class="panel">
+          <h2>高德发现参数</h2>
+          <p class="hint">这个区域用于验证真实高德 MCP 链路。发现竞品后，页面会自动刷新目标酒店看板。</p>
+          <form id="discover-form">
+            <label>目标酒店
+              <select id="discover-hotel-id" name="hotel_id"></select>
+            </label>
+            <div class="row">
+              <label>搜索半径（米）
+                <input name="radius_meters" type="number" min="100" max="10000" value="2000" />
+              </label>
+              <label>返回数量
+                <input name="limit" type="number" min="1" max="50" value="10" />
+              </label>
+            </div>
+            <button type="submit">发现竞品并刷新看板</button>
+          </form>
+        </section>
+
+        <section class="panel">
           <h2>采价任务</h2>
-          <p class="hint">选择一个目标酒店，按未来日期抓取竞品价格。当前 OTA 仍是 mock adapter，高德发现可以切真实 MCP。</p>
+          <p class="hint">选择一个目标酒店，按未来日期抓取竞品价格。当前默认会优先走真实携程 Playwright 登录态；美团仍可保留为 mock。</p>
           <form id="collect-form">
             <label>目标酒店
               <select id="target-hotel-id" name="target_hotel_id"></select>
@@ -274,10 +299,10 @@ def render_admin_html() -> str:
             <label>平台
               <select id="platforms" multiple size="2">
                 <option value="ctrip" selected>ctrip</option>
-                <option value="meituan" selected>meituan</option>
+                <option value="meituan">meituan</option>
               </select>
             </label>
-            <button type="submit">执行采价</button>
+            <button type="submit">执行采价并刷新看板</button>
           </form>
         </section>
       </div>
@@ -316,7 +341,7 @@ def render_admin_html() -> str:
 
   <script>
     const apiPrefix = "/api/v1";
-    const state = { hotels: [], selectedHotelId: null };
+    const state = { hotels: [], selectedHotelId: null, runtime: null };
 
     function setStatus(text) {
       document.getElementById("status-box").textContent = text;
@@ -324,6 +349,18 @@ def render_admin_html() -> str:
 
     function setResult(payload) {
       document.getElementById("result-box").textContent = JSON.stringify(payload, null, 2);
+    }
+
+    function setProviderStatus(runtime) {
+      state.runtime = runtime;
+      document.getElementById("provider-pill").textContent =
+        `AMap Provider: ${runtime.amap_provider} via ${runtime.amap_mcp_command}`;
+      document.getElementById("key-pill").textContent =
+        runtime.amap_api_key_configured ? "API Key: configured" : "API Key: missing";
+      document.getElementById("ctrip-pill").textContent =
+        `Ctrip Provider: ${runtime.ctrip_provider} ${runtime.ctrip_headless ? "(headless)" : "(headed)"}`;
+      document.getElementById("ctrip-state-pill").textContent =
+        runtime.ctrip_storage_state_exists ? "Ctrip State: loaded" : "Ctrip State: missing";
     }
 
     function collectSelectedPlatforms() {
@@ -368,11 +405,21 @@ def render_admin_html() -> str:
       }
       renderHotels();
       renderHotelSelect();
+      renderDiscoverSelect();
       setStatus(`已加载 ${hotels.length} 家酒店`);
     }
 
     function renderHotelSelect() {
       const select = document.getElementById("target-hotel-id");
+      populateHotelSelect(select);
+    }
+
+    function renderDiscoverSelect() {
+      const select = document.getElementById("discover-hotel-id");
+      populateHotelSelect(select);
+    }
+
+    function populateHotelSelect(select) {
       select.innerHTML = "";
       for (const hotel of state.hotels) {
         const option = document.createElement("option");
@@ -424,13 +471,21 @@ def render_admin_html() -> str:
     async function discoverCompetitors(hotelId) {
       state.selectedHotelId = hotelId;
       renderHotelSelect();
-      setStatus(`正在为酒店 ${hotelId} 发现竞品...`);
+      renderDiscoverSelect();
+      const form = document.getElementById("discover-form");
+      const payload = normalizeFormData(form);
+      setStatus(`正在通过 ${state.runtime?.amap_provider || "unknown"} 为酒店 ${hotelId} 发现竞品...`);
       const result = await request(`${apiPrefix}/hotels/${hotelId}/discover-competitors`, {
         method: "POST",
-        body: JSON.stringify({ radius_meters: 3000, limit: 10 }),
+        body: JSON.stringify({
+          radius_meters: Number(payload.radius_meters || 2000),
+          limit: Number(payload.limit || 10),
+        }),
       });
-      setResult(result);
-      setStatus(`竞品发现完成，共返回 ${result.total} 家`);
+      await loadHotels();
+      const dashboard = await request(`${apiPrefix}/hotels/${hotelId}/dashboard`);
+      setResult({ discovery: result, dashboard });
+      setStatus(`竞品发现完成，共返回 ${result.total} 家，已同步刷新看板`);
     }
 
     async function loadDashboard(hotelId) {
@@ -447,13 +502,31 @@ def render_admin_html() -> str:
       const payload = normalizeFormData(event.target);
       payload.platforms = collectSelectedPlatforms();
       payload.target_hotel_id = Number(payload.target_hotel_id);
-      setStatus(`正在执行酒店 ${payload.target_hotel_id} 的采价任务...`);
+      setStatus(`正在执行酒店 ${payload.target_hotel_id} 的采价任务，平台=${payload.platforms.join(", ")}...`);
       const result = await request(`${apiPrefix}/rates/collect`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setResult(result);
-      setStatus(`采价完成，共写入 ${result.total_snapshots} 条快照`);
+      const dashboard = await request(`${apiPrefix}/hotels/${payload.target_hotel_id}/dashboard`);
+      const summary = summarizeSnapshots(result.snapshots);
+      setResult({ collection: result, summary, dashboard });
+      setStatus(`采价完成，共写入 ${result.total_snapshots} 条快照，已刷新看板`);
+    }
+
+    function summarizeSnapshots(snapshots) {
+      const byPlatform = {};
+      for (const item of snapshots) {
+        const platform = item.platform;
+        byPlatform[platform] ??= { count: 0, min_price: null, max_price: null };
+        byPlatform[platform].count += 1;
+        byPlatform[platform].min_price = byPlatform[platform].min_price === null
+          ? item.final_price
+          : Math.min(byPlatform[platform].min_price, item.final_price);
+        byPlatform[platform].max_price = byPlatform[platform].max_price === null
+          ? item.final_price
+          : Math.max(byPlatform[platform].max_price, item.final_price);
+      }
+      return byPlatform;
     }
 
     document.getElementById("hotel-form").addEventListener("submit", (event) => {
@@ -462,6 +535,12 @@ def render_admin_html() -> str:
 
     document.getElementById("collect-form").addEventListener("submit", (event) => {
       collectRates(event).catch((error) => setStatus(`采价失败: ${error.message}`));
+    });
+
+    document.getElementById("discover-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const hotelId = Number(new FormData(event.target).get("hotel_id"));
+      discoverCompetitors(hotelId).catch((error) => setStatus(`发现竞品失败: ${error.message}`));
     });
 
     document.getElementById("refresh-hotels").addEventListener("click", () => {
@@ -476,6 +555,7 @@ def render_admin_html() -> str:
       if (action === "select") {
         state.selectedHotelId = hotelId;
         renderHotelSelect();
+        renderDiscoverSelect();
         setStatus(`已选中酒店 ${hotelId}`);
       } else if (action === "discover") {
         discoverCompetitors(hotelId).catch((error) => setStatus(`发现竞品失败: ${error.message}`));
@@ -490,7 +570,10 @@ def render_admin_html() -> str:
     document.querySelector('input[name="check_in_date"]').value = today.toISOString().slice(0, 10);
     document.querySelector('input[name="check_out_date"]').value = tomorrow.toISOString().slice(0, 10);
 
-    loadHotels().catch((error) => setStatus(`初始化失败: ${error.message}`));
+    request(`${apiPrefix}/system/runtime`)
+      .then(setProviderStatus)
+      .then(loadHotels)
+      .catch((error) => setStatus(`初始化失败: ${error.message}`));
   </script>
 </body>
 </html>"""

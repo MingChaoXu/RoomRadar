@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from hotel_spider.adapters.amap import AmapMcpAdapter, MockAmapAdapter, Point
 from hotel_spider.adapters.ota import MockOtaAdapter
+from hotel_spider.api.routes.system import runtime_info
 from hotel_spider.db.models import Base, CompetitorGroup, Hotel, RateSnapshot
 from hotel_spider.main import create_app
 from hotel_spider.schemas.rate import RateCollectionRequest
 from hotel_spider.services.discovery import DiscoveryService
 from hotel_spider.services.rates import RateCollectionService
+from hotel_spider.web.admin import render_admin_html
 
 
 def build_session(tmp_path: Path) -> Session:
@@ -26,8 +28,29 @@ def test_app_routes_are_registered():
     assert "/" in paths
     assert "/admin" in paths
     assert "/healthz" in paths
+    assert "/api/v1/system/runtime" in paths
     assert "/api/v1/hotels" in paths
     assert "/api/v1/rates/collect" in paths
+
+
+def test_admin_page_exposes_ctrip_controls():
+    html = render_admin_html()
+
+    assert "Ctrip Provider:" in html
+    assert "Ctrip State:" in html
+    assert "执行采价并刷新看板" in html
+    assert 'request(`${apiPrefix}/system/runtime`)' in html
+
+
+def test_runtime_endpoint_reports_amap_and_ctrip_status():
+    payload = runtime_info()
+
+    assert "amap_provider" in payload
+    assert "amap_api_key_configured" in payload
+    assert "ctrip_provider" in payload
+    assert "ctrip_storage_state_configured" in payload
+    assert "ctrip_storage_state_exists" in payload
+    assert "playwright_browsers_path" in payload
 
 
 def test_discovery_service_creates_competitors(tmp_path: Path):
@@ -85,6 +108,21 @@ def test_rate_collection_service_persists_snapshots(tmp_path: Path):
     assert len(snapshots) == 2
     saved = list(db.scalars(select(RateSnapshot).where(RateSnapshot.hotel_id == competitor.id)))
     assert len(saved) == 2
+
+
+def test_mock_ota_adapter_accepts_hotel_context():
+    adapter = MockOtaAdapter(platform="ctrip")
+    results = adapter.collect_rates(
+        hotel_name="上海静安示例酒店竞品酒店1",
+        city="上海",
+        address="静安区示例路66号",
+        check_in_date=date(2026, 4, 1),
+        check_out_date=date(2026, 4, 2),
+        adults=2,
+        children=0,
+    )
+    assert len(results) == 2
+    assert results[0].platform == "ctrip"
 
 
 class FakeMcpClient:
