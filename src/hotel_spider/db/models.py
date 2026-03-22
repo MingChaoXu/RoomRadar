@@ -112,3 +112,21 @@ class RateSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
 
     hotel: Mapped[Hotel] = relationship()
+
+
+class RateCollectionStatus(Base):
+    __tablename__ = "rate_collection_statuses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    hotel_id: Mapped[int] = mapped_column(ForeignKey("hotels.id"), nullable=False)
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    platform_hotel_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    platform_hotel_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    check_in_date: Mapped[date] = mapped_column(Date, nullable=False)
+    check_out_date: Mapped[date] = mapped_column(Date, nullable=False)
+    attempt_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
+
+    hotel: Mapped[Hotel] = relationship()

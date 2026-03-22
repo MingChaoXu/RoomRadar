@@ -9,6 +9,8 @@ data/
 *.sqlite
 *.sqlite3
 storage_state.json
+*_storage_state.json
+export_meituan_state.py
 *.pyc
 *.pyo
 *.pyd

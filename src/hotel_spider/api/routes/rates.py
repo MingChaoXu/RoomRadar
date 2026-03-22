@@ -28,16 +28,23 @@ def collect_rates(payload: RateCollectionRequest, db: Session = Depends(get_db))
     if not competitor_ids:
         raise HTTPException(status_code=400, detail="No active competitors found for target hotel")
 
-    hotels = list(db.scalars(select(Hotel).where(Hotel.id.in_(competitor_ids))))
+    competitor_hotels = list(db.scalars(select(Hotel).where(Hotel.id.in_(competitor_ids))))
+    hotels_by_id = {target_hotel.id: target_hotel}
+    hotels_by_id.update({hotel.id: hotel for hotel in competitor_hotels})
+    hotels = list(hotels_by_id.values())
 
     service = RateCollectionService(db=db)
     snapshots = []
+    statuses = []
     for platform in payload.platforms:
         adapter = get_ota_adapter(platform)
-        snapshots.extend(service.collect(adapter=adapter, hotels=hotels, query=payload, platform=platform))
+        collected = service.collect(adapter=adapter, hotels=hotels, query=payload, platform=platform)
+        snapshots.extend(collected.snapshots)
+        statuses.extend(collected.statuses)
 
     return RateCollectionResponse(
         target_hotel_id=payload.target_hotel_id,
         total_snapshots=len(snapshots),
+        statuses=statuses,
         snapshots=snapshots,
     )

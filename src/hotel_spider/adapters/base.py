@@ -29,6 +29,16 @@ class RateCandidate:
     free_cancel: bool
 
 
+@dataclass
+class RateCollectionResult:
+    platform: str
+    status: str
+    reason: str | None
+    rates: list[RateCandidate]
+    platform_hotel_id: str | None = None
+    platform_hotel_name: str | None = None
+
+
 class AmapAdapter(Protocol):
     def discover_competitors(
         self,
@@ -54,4 +64,4 @@ class OtaAdapter(Protocol):
         check_out_date: date,
         adults: int,
         children: int,
-    ) -> list[RateCandidate]: ...
+    ) -> RateCollectionResult: ...

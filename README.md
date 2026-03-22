@@ -8,7 +8,14 @@
 4. 标准化价格快照存储
 5. 基础看板查询
 
-当前默认启用 `mock` 适配器模式，便于本地联调。后续接入高德 MCP、携程和美团真实采集时，只需要替换 adapter。
+当前已经支持真实链路接入：
+
+1. 高德 MCP 发现竞品
+2. 携程 Playwright 登录态采价
+3. 美团 Playwright 登录态采价
+4. `/admin` 控制台地图、价格对比、采价状态展示
+
+`mock` 模式仍然保留，便于在没有真实账号和 Key 的环境下联调。
 
 ## Quick Start
 
@@ -45,6 +52,7 @@ http://127.0.0.1:8000/admin
 ```bash
 export AMAP_PROVIDER=mcp
 export AMAP_MAPS_API_KEY=你的高德Key
+export AMAP_JS_API_KEY=你的高德Web端JSAPI Key
 export AMAP_MCP_COMMAND=npx
 export AMAP_MCP_ARGS="-y @amap/amap-maps-mcp-server"
 uv run uvicorn hotel_spider.main:app --reload
@@ -58,6 +66,24 @@ uv run uvicorn hotel_spider.main:app --reload
 
 如果你要试别的实现，例如 Python 版 `uvx amap-mcp-server`，也可以替换 `AMAP_MCP_COMMAND` 和 `AMAP_MCP_ARGS`，但我当前在这个项目里实际验证通过的是 npm 这一套。
 
+如果你要在 `/admin` 里显示地图窗口，还需要配置 `AMAP_JS_API_KEY`。后端的 MCP Key 和前端 JSAPI Key 在实际项目里建议分开配置；如果没单独配置，当前实现会回退尝试复用 `AMAP_MAPS_API_KEY`。
+
+## 当前真实接入状态
+
+截至 `2026-03-22`，当前项目内已实际验证：
+
+1. 高德 MCP 可用，能够基于酒店地址和名称发现周边竞品
+2. 携程真实可用，已能抓到目标酒店和竞品酒店的真实房型价格
+3. 美团单酒店真实可用，已能抓到列表最低价
+4. 美团批量端到端采价仍会偶发触发风控，系统会明确返回验证地址，而不是只显示“暂无”
+
+一次独立临时库的端到端验证结果是：
+
+1. 目标酒店：`上海静安香格里拉大酒店`
+2. 高德发现竞品：`璞丽酒店`、`Jing'anKerryApartments`
+3. 携程价格可成功写入快照
+4. 美团在该轮批量采价里返回 `blocked`，并附带 `verify.meituan.com` 验证链接
+
 ## 携程登录态接入
 
 如果要抓携程真实价格，需要提供已登录的 `storage_state.json`：
@@ -67,6 +93,9 @@ export PLAYWRIGHT_BROWSERS_PATH=/home/你的用户名/tools/playwright-browsers
 export CTRIP_PROVIDER=playwright
 export CTRIP_STORAGE_STATE_PATH=/mnt/d/Lab/workspace/trae_projects/hotel_spider/storage_state.json
 export CTRIP_HEADLESS=true
+export MEITUAN_PROVIDER=playwright
+export MEITUAN_STORAGE_STATE_PATH=/mnt/d/Lab/workspace/trae_projects/hotel_spider/meituan_storage_state.json
+export MEITUAN_HEADLESS=true
 ```
 
 当前项目已经验证：
@@ -75,6 +104,43 @@ export CTRIP_HEADLESS=true
 2. 详情页能触发真实房型接口 `33278/getHotelRoomListInland`
 3. 未登录态价格会被隐藏
 4. 所以真实价格抓取依赖登录态
+
+## 美团接入说明
+
+当前美团实现已经接到真实链路：
+
+1. 可通过美团城市搜索接口把城市名映射到 `cityId`
+2. 可构造酒店列表页 URL，并拿到真实 `hbsearch/HotelSearch` 请求
+3. 提供登录态后，可抓取列表最低价
+4. 如果命中风控，当前会明确返回：
+   `美团触发风控验证，请先完成验证: https://verify.meituan.com/...`
+
+建议实际操作流程：
+
+1. 在 Windows 浏览器打开 `https://i.meituan.com/awp/h5/hotel/search/search.html`
+2. 完成登录
+3. 进入酒店搜索页、列表页、详情页至少各一次
+4. 如出现风控验证，先人工完成
+5. 重新导出 `meituan_storage_state.json`
+6. 再回到 `/admin` 执行美团采价
+
+如果单酒店能成功、批量采价又被拦，这是当前美团风控的正常表现，不是前端显示错误。
+
+## `/admin` 控制台说明
+
+当前 `/admin` 已支持：
+
+1. 新增目标酒店
+2. 触发真实高德发现竞品
+3. 触发 `ctrip / meituan` 采价
+4. 价格对比表、低价竞品告警、地图视图
+5. 明确展示 `未采价 / 未匹配 / 无可售 / 风控验证` 等原因
+
+页面顶部会展示：
+
+1. `AMap Provider`
+2. `Ctrip Provider / Ctrip State`
+3. `Meituan Provider / Meituan State`
 
 ## 环境变量
 

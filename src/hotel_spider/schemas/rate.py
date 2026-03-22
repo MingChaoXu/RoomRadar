@@ -42,7 +42,23 @@ class RateSnapshotRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RateCollectionStatusRead(BaseModel):
+    hotel_id: int
+    hotel_name: str
+    platform: str
+    platform_hotel_id: str | None = None
+    platform_hotel_name: str | None = None
+    check_in_date: date
+    check_out_date: date
+    attempt_status: str
+    reason: str | None = None
+    attempted_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class RateCollectionResponse(BaseModel):
     target_hotel_id: int
     total_snapshots: int
+    statuses: list[RateCollectionStatusRead]
     snapshots: list[RateSnapshotRead]

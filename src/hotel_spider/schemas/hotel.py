@@ -2,6 +2,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from hotel_spider.schemas.rate import RateCollectionStatusRead
+
 
 class HotelBase(BaseModel):
     name: str
@@ -89,9 +91,16 @@ class DashboardCompetitorItem(BaseModel):
     hotel_id: int
     hotel_name: str
     distance_meters: int | None = None
+    city: str | None = None
+    address: str | None = None
+    lng: float | None = None
+    lat: float | None = None
     latest_rates: list[SnapshotRead]
+    collection_statuses: list[RateCollectionStatusRead]
 
 
 class DashboardResponse(BaseModel):
     target_hotel: HotelRead
+    target_latest_rates: list[SnapshotRead]
+    target_collection_statuses: list[RateCollectionStatusRead]
     competitors: list[DashboardCompetitorItem]

@@ -13,12 +13,16 @@ class Settings(BaseSettings):
     amap_mcp_command: str = "uvx"
     amap_mcp_args: str = "amap-mcp-server"
     amap_maps_api_key: str | None = None
+    amap_js_api_key: str | None = None
     amap_mcp_timeout_seconds: float = 20.0
     amap_hotel_keyword: str = "酒店"
     playwright_browsers_path: str | None = None
     ctrip_provider: str = "mock"
     ctrip_storage_state_path: str | None = None
     ctrip_headless: bool = True
+    meituan_provider: str = "mock"
+    meituan_storage_state_path: str | None = None
+    meituan_headless: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
